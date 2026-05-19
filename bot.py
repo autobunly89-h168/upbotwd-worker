@@ -81,7 +81,7 @@ def handle_message(message):
 
             print(f"Total IDs found: {len(ids)}")
 
-            # បញ្ជូនទិន្នន័យទាំងអស់ទៅ Google Sheet ក្នុងពេលតែមួយ
+            # បញ្ជូនទិន្នន័យទាំងអស់ទៅ Google Sheet ក្នុងពេលតែមួយជានិច្ច
             data_to_send = {
                 "sheet_name": sheet_name,
                 "wd_date": wd_date,
@@ -93,23 +93,25 @@ def handle_message(message):
             if response.status_code == 200:
                 print(f"Successfully sent {len(ids)} IDs to Sheet '{sheet_name}'")
                 
-                # --- ៤. មុខងារថ្មី៖ បំបែកសារឆ្លើយតបជាកញ្ចប់តូចៗ (Chunk នៃ ១៥ ID) ---
-                # ដើម្បីការពារកុំឱ្យខុសច្បាប់ Limit របស់ Telegram 
-                chunk_size = 15
-                for i in range(0, len(ids), chunk_size):
-                    chunk_ids = ids[i:i + chunk_size]
+                # --- ៤. លក្ខខណ្ឌឆ្លើយតប (Quote Reply) តាមចំនួន ID ---
+                if len(ids) > 15:
+                    # បើ ID ច្រើនជាង ១៥ ឱ្យផ្ញើសារខ្លីតាមបងកំណត់
+                    reply_message = "Remake: late wd 1day up\n\n"
+                    reply_message += f"Web : {sheet_name}\n\n"
+                    reply_message += f"WD Date : {wd_date}\n\n"
+                    reply_message += "បានបញ្ចូលក្នុង report រួចរាល់100% ដោយ ID ច្រើនពេកខ្ញុំមិនអាចផ្ញើមកវិញ"
                     
-                    # បង្កើតទម្រង់សារឆ្លើយតបសម្រាប់កញ្ចប់នីមួយៗ
-                    reply_message = f"Remake: late wd 1day up (ភាគ {int(i/chunk_size) + 1})\n\n"
+                    bot.reply_to(message, reply_message)
+                else:
+                    # បើ ID តិចជាង ឬស្មើ ១៥ ឱ្យរាយនាម Quote ធម្មតា
+                    reply_message = "Remake: late wd 1day up\n\n"
                     reply_message += f"Web : {sheet_name}\n\n"
                     reply_message += f"WD Date : {wd_date}\n"
                     
-                    for item in chunk_ids:
+                    for item in ids:
                         reply_message += f"ID : `{item}`\n"
                     
-                    # ផ្ញើ Quote Reply ត្រឡប់ទៅក្រុមវិញ (ផ្ញើបន្តបន្ទាប់គ្នា)
                     bot.reply_to(message, reply_message, parse_mode="Markdown")
-                    time.sleep(0.5) # ផ្អាកកន្លះវិនាទីដើម្បីកុំឱ្យ Telegram ចាប់ Block
                     
             else:
                 print(f"Failed to send to GAS. Status code: {response.status_code}")
