@@ -21,7 +21,7 @@ def run_web_server():
     app.run(host='0.0.0.0', port=port)
 
 # ==========================================
-# 2. កំណត់តម្លៃ Token និង URL ផ្ទាល់ៗ (ទិន្នន័យថ្មីរបស់បង)
+# 2. កំណត់តម្លៃ Token និង URL ផ្ទាល់ៗ
 # ==========================================
 TOKEN = "8953741339:AAH0OLFVZ8ANtsdpQESTbdFM_NB5fDnw-ns"
 GAS_URL = "https://script.google.com/macros/s/AKfycbxAqD_OTAhaNaS-ZDDG0FAuetqUUpHup8GQAFIQQDuyzm_FotarAWUw3XQOXGnsAl-z/exec" 
@@ -47,7 +47,7 @@ def handle_message(message):
             # --- ១. យកឈ្មោះ Telegram ធ្វើជាឈ្មោះ Web និងឈ្មោះ Sheet ---
             sheet_name = message.from_user.first_name or "Telegram_User"
             
-            # --- ២. ចាប់យកកាលបរិច្ឆេទ WD Date ឌីណាមិក (ទម្រង់បត់បែនខ្លាំង) ---
+            # --- ២. ចាប់យកកាលបរិច្ឆេទ WD Date ឌីណាមិក ---
             date_match = re.search(r"(?:WD\s*)?Date\s*[:]\s*([^\n]+)", text, re.IGNORECASE)
             if date_match:
                 wd_date = date_match.group(1).strip()
@@ -56,27 +56,22 @@ def handle_message(message):
             
             print(f"Target Sheet: {sheet_name} | Extracted Date: {wd_date}")
             
-            # --- ៣. កូដថ្មី៖ ចាប់យកគ្រប់ ID ទាំងអស់ (ទោះវែង ឬខ្លីកម្រិតណាក៏ចាប់អស់) ---
-            # បំបែកអត្ថបទជាជួរៗ ដើម្បីពិនិត្យ និងប្រមូលយក ID ឱ្យបានច្បាស់លាស់
+            # --- ៣. ចាប់យកគ្រប់ ID ទាំងអស់ពីក្នុងសារ ---
             lines = text.split('\n')
             ids = []
             
             for line in lines:
                 clean_line = line.strip()
-                # រំលងបន្ទាត់ទំនេរ ឬបន្ទាត់ដែលមានពាក្យ Date, Web, Remake
                 if not clean_line:
                     continue
                 if re.search(r"(?:WD\s*)?Date|Web|Remake|Late\s*wd", clean_line, re.IGNORECASE):
                     continue
                 
-                # ប្រសិនបើបន្ទាត់នោះមានសញ្ញា : (ដូចជា ID : xxx) ឱ្យយកតែអក្សរខាងក្រោយសញ្ញា :
                 if ":" in clean_line:
                     clean_line = clean_line.split(":", 1)[1].strip()
                 
-                # ចាប់យកពាក្យដាច់ដោយឡែក (ID អាចជា អក្សរ លេខ ឬសញ្ញាពិសេសខ្លះៗ ប្រវែងពី ២ ដល់ ៣០ តួ)
                 found_tokens = re.findall(r"([a-zA-Z0-9_\-]+)", clean_line)
                 for token in found_tokens:
-                    # បើមិនមែនជាពាក្យគន្លឹះប្រព័ន្ធ គឺចាត់ទុកជា ID ទាំងអស់
                     if token.lower() not in ['id', 'web', 'date', 'wd', 'remake']:
                         ids.append(token)
             
@@ -86,7 +81,7 @@ def handle_message(message):
 
             print(f"Total IDs found: {len(ids)}")
 
-            # បញ្ជូនទៅ Google Sheet
+            # បញ្ជូនទិន្នន័យទាំងអស់ទៅ Google Sheet ក្នុងពេលតែមួយ
             data_to_send = {
                 "sheet_name": sheet_name,
                 "wd_date": wd_date,
@@ -98,16 +93,24 @@ def handle_message(message):
             if response.status_code == 200:
                 print(f"Successfully sent {len(ids)} IDs to Sheet '{sheet_name}'")
                 
-                # --- ៤. បង្កើតសារ Quote Reply តបទៅវិញឱ្យអស់ទិន្នន័យ ---
-                reply_message = "Remake: late wd 1day up\n\n"
-                reply_message += f"Web : {sheet_name}\n\n"
-                reply_message += f"WD Date : {wd_date}\n"
-                
-                for item in ids:
-                    reply_message += f"ID : `{item}`\n"
-                
-                # ផ្ញើ Quote Reply ត្រឡប់ទៅក្រុមវិញ
-                bot.reply_to(message, reply_message, parse_mode="Markdown")
+                # --- ៤. មុខងារថ្មី៖ បំបែកសារឆ្លើយតបជាកញ្ចប់តូចៗ (Chunk នៃ ១៥ ID) ---
+                # ដើម្បីការពារកុំឱ្យខុសច្បាប់ Limit របស់ Telegram 
+                chunk_size = 15
+                for i in range(0, len(ids), chunk_size):
+                    chunk_ids = ids[i:i + chunk_size]
+                    
+                    # បង្កើតទម្រង់សារឆ្លើយតបសម្រាប់កញ្ចប់នីមួយៗ
+                    reply_message = f"Remake: late wd 1day up (ភាគ {int(i/chunk_size) + 1})\n\n"
+                    reply_message += f"Web : {sheet_name}\n\n"
+                    reply_message += f"WD Date : {wd_date}\n"
+                    
+                    for item in chunk_ids:
+                        reply_message += f"ID : `{item}`\n"
+                    
+                    # ផ្ញើ Quote Reply ត្រឡប់ទៅក្រុមវិញ (ផ្ញើបន្តបន្ទាប់គ្នា)
+                    bot.reply_to(message, reply_message, parse_mode="Markdown")
+                    time.sleep(0.5) # ផ្អាកកន្លះវិនាទីដើម្បីកុំឱ្យ Telegram ចាប់ Block
+                    
             else:
                 print(f"Failed to send to GAS. Status code: {response.status_code}")
                 
@@ -123,7 +126,7 @@ def run_bot_polling():
             time.sleep(5)
 
 # ==========================================
-# 4. រត់ Web Server និង Bot ព្រមគ្នា (Multi-Threading)
+# 4. រត់ Web Server និង Bot ព្រមគ្នា
 # ==========================================
 if __name__ == "__main__":
     print("Starting Web Server...")
