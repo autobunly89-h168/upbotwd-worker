@@ -17,12 +17,11 @@ def home():
     return "Bot is running 24/7 smoothly!"
 
 def run_web_server():
-    # Render នឹងបោះ Port មកឱ្យតាមរយៈ Environment Variable
     port = int(os.environ.get("PORT", 10000))
     app.run(host='0.0.0.0', port=port)
 
 # ==========================================
-# 2. កំណត់តម្លៃ Token និង URL ផ្ទាល់ៗ
+# 2. កំណត់តម្លៃ Token និង URL ផ្ទាល់ៗ (ទិន្នន័យថ្មីរបស់បង)
 # ==========================================
 TOKEN = "8953741339:AAH0OLFVZ8ANtsdpQESTbdFM_NB5fDnw-ns"
 GAS_URL = "https://script.google.com/macros/s/AKfycbxAqD_OTAhaNaS-ZDDG0FAuetqUUpHup8GQAFIQQDuyzm_FotarAWUw3XQOXGnsAl-z/exec" 
@@ -45,11 +44,11 @@ def handle_message(message):
         if text:
             print(f"Received message:\n{text}")
             
-            # --- យកឈ្មោះ Telegram ធ្វើជាឈ្មោះ Web និងឈ្មោះ Sheet ---
+            # --- ១. យកឈ្មោះ Telegram ធ្វើជាឈ្មោះ Web និងឈ្មោះ Sheet ---
             sheet_name = message.from_user.first_name or "Telegram_User"
             
-            # --- ចាប់យកកាលបរិច្ឆេទ WD Date ឌីណាមិក (គេសរសេរអីយកហ្នឹង) ---
-            date_match = re.search(r"(?:WD\s*)?Date\s*:\s*([^\n]+)", text, re.IGNORECASE)
+            # --- ២. ចាប់យកកាលបរិច្ឆេទ WD Date ឌីណាមិក (ទម្រង់បត់បែនខ្លាំង) ---
+            date_match = re.search(r"(?:WD\s*)?Date\s*[:]\s*([^\n]+)", text, re.IGNORECASE)
             if date_match:
                 wd_date = date_match.group(1).strip()
             else:
@@ -57,28 +56,49 @@ def handle_message(message):
             
             print(f"Target Sheet: {sheet_name} | Extracted Date: {wd_date}")
             
-            # --- ចាប់យកគ្រប់កូដ ID ទាំងអស់ (រក្សាអក្សរតូចធំដដែល) ---
-            clean_text = re.sub(r"(?:WD\s*)?Date\s*:[^\n]*", "", text, flags=re.IGNORECASE)
-            clean_text = re.sub(r"(Web|Remake|Late\s*wd)[^\n]*", "", clean_text, flags=re.IGNORECASE)
+            # --- ៣. កូដថ្មី៖ ចាប់យកគ្រប់ ID ទាំងអស់ (ទោះវែង ឬខ្លីកម្រិតណាក៏ចាប់អស់) ---
+            # បំបែកអត្ថបទជាជួរៗ ដើម្បីពិនិត្យ និងប្រមូលយក ID ឱ្យបានច្បាស់លាស់
+            lines = text.split('\n')
+            ids = []
             
-            ids = re.findall(r"([a-zA-Z0-9]{3,15})", clean_text)
+            for line in lines:
+                clean_line = line.strip()
+                # រំលងបន្ទាត់ទំនេរ ឬបន្ទាត់ដែលមានពាក្យ Date, Web, Remake
+                if not clean_line:
+                    continue
+                if re.search(r"(?:WD\s*)?Date|Web|Remake|Late\s*wd", clean_line, re.IGNORECASE):
+                    continue
+                
+                # ប្រសិនបើបន្ទាត់នោះមានសញ្ញា : (ដូចជា ID : xxx) ឱ្យយកតែអក្សរខាងក្រោយសញ្ញា :
+                if ":" in clean_line:
+                    clean_line = clean_line.split(":", 1)[1].strip()
+                
+                # ចាប់យកពាក្យដាច់ដោយឡែក (ID អាចជា អក្សរ លេខ ឬសញ្ញាពិសេសខ្លះៗ ប្រវែងពី ២ ដល់ ៣០ តួ)
+                found_tokens = re.findall(r"([a-zA-Z0-9_\-]+)", clean_line)
+                for token in found_tokens:
+                    # បើមិនមែនជាពាក្យគន្លឹះប្រព័ន្ធ គឺចាត់ទុកជា ID ទាំងអស់
+                    if token.lower() not in ['id', 'web', 'date', 'wd', 'remake']:
+                        ids.append(token)
             
             if not ids:
                 print("No IDs found in this message.")
                 return
 
+            print(f"Total IDs found: {len(ids)}")
+
+            # បញ្ជូនទៅ Google Sheet
             data_to_send = {
                 "sheet_name": sheet_name,
                 "wd_date": wd_date,
                 "ids": ids
             }
             
-            response = requests.post(GAS_URL, json=data_to_send, timeout=10)
+            response = requests.post(GAS_URL, json=data_to_send, timeout=15)
             
             if response.status_code == 200:
                 print(f"Successfully sent {len(ids)} IDs to Sheet '{sheet_name}'")
                 
-                # --- បង្កើតទម្រង់សារ Quote Reply ---
+                # --- ៤. បង្កើតសារ Quote Reply តបទៅវិញឱ្យអស់ទិន្នន័យ ---
                 reply_message = "Remake: late wd 1day up\n\n"
                 reply_message += f"Web : {sheet_name}\n\n"
                 reply_message += f"WD Date : {wd_date}\n"
@@ -86,6 +106,7 @@ def handle_message(message):
                 for item in ids:
                     reply_message += f"ID : `{item}`\n"
                 
+                # ផ្ញើ Quote Reply ត្រឡប់ទៅក្រុមវិញ
                 bot.reply_to(message, reply_message, parse_mode="Markdown")
             else:
                 print(f"Failed to send to GAS. Status code: {response.status_code}")
@@ -106,7 +127,6 @@ def run_bot_polling():
 # ==========================================
 if __name__ == "__main__":
     print("Starting Web Server...")
-    # បើកឱ្យ Web Server រត់នៅ Background មុនដើម្បីកុំឱ្យ Render កាត់ផ្ដាច់
     server_thread = Thread(target=run_web_server)
     server_thread.daemon = True
     server_thread.start()
